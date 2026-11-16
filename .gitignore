@@ -1,0 +1,30 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# macOS system files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE & Editor settings
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test outputs & generated JSON results
+tests/result/
+Result_*/
+output_*.json
+
+# Logs & temporary files
+*.log
+*.tmp

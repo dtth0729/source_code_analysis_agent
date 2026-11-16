@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  check_format_and_lint:
+    name: Check Format and Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python & Dependencies
+        uses: ./.github/actions/setup-uv-deps
+
+      - name: Install CSpell
+        run: npm install -g cspell
+
+      - name: Format check
+        run: |
+          uv run ruff check --select F401,Q,I .
+          uv run black --check --config pyproject.toml .
+
+      - name: Lint
+        run: |
+          uv run pylint --rcfile=pyproject.toml $(git ls-files '*.py')
+          uv run ruff check .
+          uv run pyright .
+          cspell --gitignore --no-progress --no-summary --no-must-find-files .
+
+  test:
+    name: Run API DB Tests
+    runs-on: ubuntu-latest
+    env:
+      MYSQL_DATABASE: test_db
+      MYSQL_ROOT_USER: root
+      MYSQL_ROOT_PASSWORD: root
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up MySQL
+        run: |
+          sudo /etc/init.d/mysql start
+          mysql -e 'CREATE DATABASE ${{ env.MYSQL_DATABASE }};' -uroot -proot
+          ps aux | grep '[m]ysqld'
+          ss -ltnp | grep ':3306'
+
+      - name: Start DB containers via Docker and Docker Compose
+        run: |
+          docker compose up -d postgres mongodb redis
+          docker compose run --rm --no-deps dockerize \
+            -wait tcp://postgres:5432 \
+            -wait tcp://mongodb:27017 \
+            -wait tcp://redis:6379 \
+            -timeout 60s \
+            -wait-retry-interval 5s
+          docker ps
+
+      - name: Setup Python & Dependencies
+        uses: ./.github/actions/setup-uv-deps
+
+      - name: Install Bats
+        run: |
+          sudo apt-get update && sudo apt-get install -y bats
+
+      - name: Run API DB tests via Makefile
+        env:
+          MYSQL_URL: "mysql+asyncmy://${{ env.MYSQL_ROOT_USER }}:${{ env.MYSQL_ROOT_PASSWORD }}@localhost:3306/${{ env.MYSQL_DATABASE }}?reinitialize=true"
+        run: make test
